@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { nav } from "@/lib/sample-data";
+import { AccountSlot } from "./account-slot";
 
 export function SiteHeader() {
   return (
@@ -42,9 +43,7 @@ export function SiteHeader() {
 
           {/* Right: account, bag */}
           <div className="flex items-center gap-5 justify-end text-[0.6875rem] tracking-widest uppercase">
-            <Link href="/account" className="hidden md:inline">
-              Account
-            </Link>
+            <AccountSlot />
             <Link href="/wishlist" aria-label="Wishlist" className="hidden sm:inline">
               <HeartIcon />
             </Link>

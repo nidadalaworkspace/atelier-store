@@ -8,6 +8,13 @@
       "when": 1791127835675,
       "tag": "0000_chilly_warbird",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791192040877,
+      "tag": "0001_friendly_black_bird",
+      "breakpoints": true
     }
   ]
 }
