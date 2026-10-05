@@ -41,7 +41,7 @@ export default async function ProductPage({
       <ProductBreadcrumb
         trail={[
           { label: "Home", href: "/" },
-          { label: product.category, href: "/new-arrivals" },
+          { label: product.category, href: `/collections/${product.categorySlug}` },
           { label: product.name },
         ]}
       />

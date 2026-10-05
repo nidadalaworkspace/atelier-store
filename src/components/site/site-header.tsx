@@ -58,7 +58,7 @@ export function SiteHeader() {
             <Link
               key={item.href}
               href={item.href}
-              className="text-[0.6875rem] tracking-widest uppercase hover:text-ink-soft transition-colors"
+              className="link text-[0.6875rem] tracking-widest uppercase"
             >
               {item.label}
             </Link>

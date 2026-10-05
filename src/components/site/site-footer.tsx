@@ -42,7 +42,7 @@ export function SiteFooter() {
           <div>
             <Eyebrow className="text-paper/60">Contact</Eyebrow>
             <ul className="mt-5 space-y-2.5 text-sm text-paper/80">
-              <li>+1 (212) 555&nbsp;0100</li>
+              <li>+44 20 7946&nbsp;0100</li>
               <li>care@atelier.example</li>
               <li className="pt-2 text-paper/60 leading-relaxed">
                 14 Via Monte Napoleone<br />
@@ -53,7 +53,7 @@ export function SiteFooter() {
           <div>
             <Eyebrow className="text-paper/60">Country</Eyebrow>
             <div className="mt-5 text-sm text-paper/80">
-              United States · USD $
+              United Kingdom · GBP £
             </div>
           </div>
         </div>
@@ -65,7 +65,7 @@ export function SiteFooter() {
               <Link
                 key={item.href}
                 href={item.href}
-                className="hover:text-paper transition-colors"
+                className="link hover:text-paper transition-colors"
               >
                 {item.label}
               </Link>
@@ -93,7 +93,7 @@ function FooterCol({
           <li key={item.href}>
             <Link
               href={item.href}
-              className="hover:text-paper transition-colors"
+              className="link hover:text-paper transition-colors"
             >
               {item.label}
             </Link>

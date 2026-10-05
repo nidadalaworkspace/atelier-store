@@ -7,6 +7,7 @@ export type Product = {
   slug: string;
   name: string;
   category: string;
+  categorySlug: string;
   price: number;
   imageUrl: string;
   isNew: boolean;
@@ -37,7 +38,7 @@ type ProductCardRow = {
   name: string;
   priceCents: number;
   isNew: boolean;
-  category: { name: string };
+  category: { name: string; slug: string };
   images: { url: string }[];
 };
 
@@ -58,6 +59,7 @@ function mapProduct(row: ProductCardRow): Product {
     slug: row.slug,
     name: row.name,
     category: row.category.name,
+    categorySlug: row.category.slug,
     price: row.priceCents / 100,
     imageUrl: row.images[0]?.url ?? "",
     isNew: row.isNew,
@@ -79,7 +81,7 @@ function mapProductDetail(row: ProductDetailRow): ProductDetail {
   };
 }
 
-export async function getNewArrivals(limit = 8): Promise<Product[]> {
+export async function getNewArrivals(limit?: number): Promise<Product[]> {
   const rows = await db.query.products.findMany({
     with: {
       category: true,
@@ -146,6 +148,52 @@ export async function getRelatedProducts(
 
 export async function getAllProductSlugs(): Promise<{ slug: string }[]> {
   return db.select({ slug: products.slug }).from(products);
+}
+
+export type Category = {
+  slug: string;
+  name: string;
+  tagline: string;
+  imageUrl: string | null;
+};
+
+export type CategoryWithProducts = {
+  category: Category;
+  products: Product[];
+};
+
+export async function getCategoryBySlug(
+  slug: string,
+): Promise<CategoryWithProducts | null> {
+  const row = await db.query.categories.findFirst({
+    where: (c, { eq }) => eq(c.slug, slug),
+    with: {
+      products: {
+        with: {
+          category: true,
+          images: {
+            where: (image, { eq }) => eq(image.position, 0),
+            limit: 1,
+          },
+        },
+        orderBy: (p, { desc }) => desc(p.createdAt),
+      },
+    },
+  });
+  if (!row) return null;
+  return {
+    category: {
+      slug: row.slug,
+      name: row.name,
+      tagline: row.tagline ?? "",
+      imageUrl: row.imageUrl,
+    },
+    products: row.products.map(mapProduct),
+  };
+}
+
+export async function getAllCategorySlugs(): Promise<{ slug: string }[]> {
+  return db.select({ slug: categories.slug }).from(categories);
 }
 
 export async function getCollections(): Promise<Collection[]> {
