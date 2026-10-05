@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { categories, products } from "@/db/schema";
 
 export type Product = {
+  id: string;
   slug: string;
   name: string;
   category: string;
@@ -34,6 +35,7 @@ export type Collection = {
 };
 
 type ProductCardRow = {
+  id: string;
   slug: string;
   name: string;
   priceCents: number;
@@ -56,6 +58,7 @@ type ProductDetailRow = ProductCardRow & {
 
 function mapProduct(row: ProductCardRow): Product {
   return {
+    id: row.id,
     slug: row.slug,
     name: row.name,
     category: row.category.name,

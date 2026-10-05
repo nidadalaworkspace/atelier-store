@@ -84,9 +84,11 @@ export const verification = pgTable("verification", {
     .defaultNow(),
 });
 
-export const userRelations = relations(user, ({ many }) => ({
+export const userRelations = relations(user, ({ one, many }) => ({
   sessions: many(session),
   accounts: many(account),
+  cart: one(carts),
+  wishlistItems: many(wishlistItems),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -166,6 +168,96 @@ export const productsRelations = relations(products, ({ one, many }) => ({
 export const productImagesRelations = relations(productImages, ({ one }) => ({
   product: one(products, {
     fields: [productImages.productId],
+    references: [products.id],
+  }),
+}));
+
+// --- Bag -------------------------------------------------------------------
+// One cart per signed-in user (UNIQUE user_id). No guest cart, no merge.
+// cart_items stores no price; amounts are read live from products.priceCents.
+
+export const carts = pgTable("carts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: text("user_id")
+    .notNull()
+    .unique()
+    .references(() => user.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const cartItems = pgTable(
+  "cart_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    cartId: uuid("cart_id")
+      .notNull()
+      .references(() => carts.id, { onDelete: "cascade" }),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    size: text("size"),
+    quantity: integer("quantity").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("cart_items_cart_product_size_unique").on(
+      table.cartId,
+      table.productId,
+      table.size,
+    ),
+  ],
+);
+
+export const cartsRelations = relations(carts, ({ one, many }) => ({
+  user: one(user, { fields: [carts.userId], references: [user.id] }),
+  items: many(cartItems),
+}));
+
+export const cartItemsRelations = relations(cartItems, ({ one }) => ({
+  cart: one(carts, { fields: [cartItems.cartId], references: [carts.id] }),
+  product: one(products, {
+    fields: [cartItems.productId],
+    references: [products.id],
+  }),
+}));
+
+// --- Wishlist --------------------------------------------------------------
+// One row per (user, product). UNIQUE pair makes toggles idempotent.
+// No ordering column beyond createdAt; recently-saved pieces surface first.
+
+export const wishlistItems = pgTable(
+  "wishlist_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("wishlist_items_user_product_unique").on(
+      table.userId,
+      table.productId,
+    ),
+  ],
+);
+
+export const wishlistItemsRelations = relations(wishlistItems, ({ one }) => ({
+  user: one(user, { fields: [wishlistItems.userId], references: [user.id] }),
+  product: one(products, {
+    fields: [wishlistItems.productId],
     references: [products.id],
   }),
 }));

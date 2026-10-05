@@ -1,18 +1,13 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { Product } from "@/lib/products";
+import { currency } from "@/lib/format";
 
 type Props = {
   product: Product;
   sizes?: string;
   priority?: boolean;
 };
-
-const formatter = new Intl.NumberFormat("en-GB", {
-  style: "currency",
-  currency: "GBP",
-  maximumFractionDigits: 0,
-});
 
 export function ProductCard({ product, sizes, priority }: Props) {
   return (
@@ -44,7 +39,7 @@ export function ProductCard({ product, sizes, priority }: Props) {
           </h3>
         </div>
         <div className="text-sm md:text-[0.9375rem] text-ink tabular-nums whitespace-nowrap">
-          {formatter.format(product.price)}
+          {currency(product.price)}
         </div>
       </div>
     </Link>

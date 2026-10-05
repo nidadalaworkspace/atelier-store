@@ -15,6 +15,20 @@
       "when": 1791192040877,
       "tag": "0001_friendly_black_bird",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791220849827,
+      "tag": "0002_productive_winter_soldier",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791222839547,
+      "tag": "0003_hesitant_lightspeed",
+      "breakpoints": true
     }
   ]
 }
