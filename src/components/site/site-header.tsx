@@ -16,14 +16,20 @@ export function SiteHeader() {
             >
               <MenuIcon />
             </button>
-            <button
-              type="button"
+            <Link
+              href="/search"
               aria-label="Search"
-              className="hidden md:inline-flex items-center gap-2 text-[0.6875rem] tracking-widest uppercase"
+              className="md:hidden -ml-1 p-1"
+            >
+              <SearchIcon />
+            </Link>
+            <Link
+              href="/search"
+              className="hidden md:inline-flex items-center gap-2 text-[0.6875rem] tracking-widest uppercase link"
             >
               <SearchIcon />
               <span>Search</span>
-            </button>
+            </Link>
           </div>
 
           {/* Centre: wordmark */}

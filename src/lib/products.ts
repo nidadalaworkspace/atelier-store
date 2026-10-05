@@ -1,5 +1,5 @@
 import "server-only";
-import { asc, count, eq, isNotNull } from "drizzle-orm";
+import { asc, count, eq, ilike, isNotNull, or } from "drizzle-orm";
 import { db } from "@/db";
 import { categories, products } from "@/db/schema";
 
@@ -148,6 +148,42 @@ export async function getRelatedProducts(
 
 export async function getAllProductSlugs(): Promise<{ slug: string }[]> {
   return db.select({ slug: products.slug }).from(products);
+}
+
+export async function searchProducts(
+  query: string,
+  limit = 48,
+): Promise<Product[]> {
+  const q = query.trim();
+  if (!q) return [];
+  const pattern = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+
+  const matchingCategoryIds = (
+    await db
+      .select({ id: categories.id })
+      .from(categories)
+      .where(or(ilike(categories.name, pattern), ilike(categories.slug, pattern)))
+  ).map((r) => r.id);
+
+  const rows = await db.query.products.findMany({
+    with: {
+      category: true,
+      images: {
+        where: (image, { eq }) => eq(image.position, 0),
+        limit: 1,
+      },
+    },
+    where: (p, { or: orOp, ilike: ilikeOp, inArray }) => {
+      const nameMatch = ilikeOp(p.name, pattern);
+      const descMatch = ilikeOp(p.description, pattern);
+      return matchingCategoryIds.length
+        ? orOp(nameMatch, descMatch, inArray(p.categoryId, matchingCategoryIds))
+        : orOp(nameMatch, descMatch);
+    },
+    orderBy: (p, { desc }) => desc(p.createdAt),
+    limit,
+  });
+  return rows.map(mapProduct);
 }
 
 export type Category = {
