@@ -52,6 +52,14 @@ Checkout is Stripe-hosted: `startCheckout` in `src/lib/checkout.ts` posts an emp
 
 **Money formatting.** `currency` in `src/lib/format.ts` rounds to whole dollars and is **catalogue-only**. Anything derived from cents — bag, checkout, receipts — uses `formatCents`, or `$99.99` renders as `$100` next to a Stripe page that says otherwise.
 
+**Admin area.** `/admin` is gated at three layers: `src/proxy.ts` keeps unauthenticated requests out (session cookie only — the edge can't see role), `src/app/admin/layout.tsx` calls `requireAdmin("/admin")` so non-admins get `notFound()` and the response is indistinguishable from a missing page, and every admin server action re-calls `requireAdmin()` on its first line because actions are a separate POST endpoint and the layout gate does not cover them. The `user.role` column defaults to `'customer'` and is marked `input: false` in `src/lib/auth.ts` so clients can't self-promote. **To bootstrap the first admin**, run against your DB:
+
+```sql
+UPDATE "user" SET role = 'admin' WHERE email = 'you@example.com';
+```
+
+No seed script, no self-serve promotion UI in v1.
+
 Env: copy `.env.example` → `.env`. `BETTER_AUTH_URL` and `NEXT_PUBLIC_APP_URL` must both point at the app's origin or auth callbacks break. Checkout additionally needs `STRIPE_SECRET_KEY` (prefer a restricted `rk_` key) and `STRIPE_WEBHOOK_SECRET` (from `stripe listen --forward-to localhost:3000/api/stripe/webhook` locally, or the endpoint's own signing secret when deployed). `src/lib/stripe.ts` validates these on first use rather than at import, so the storefront still builds and runs without them — only checkout and the webhook fail.
 
 ## Next.js 16 notes
