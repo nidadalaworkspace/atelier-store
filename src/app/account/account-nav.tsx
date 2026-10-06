@@ -9,7 +9,7 @@ type Item = { href: string; label: string; comingSoon?: boolean };
 
 const sections: Item[] = [
   { href: "/account", label: "Overview" },
-  { href: "/account/orders", label: "Orders", comingSoon: true },
+  { href: "/account/orders", label: "Orders" },
   { href: "/account/addresses", label: "Addresses", comingSoon: true },
   { href: "/account/payment-methods", label: "Payment methods", comingSoon: true },
   { href: "/account/preferences", label: "Preferences", comingSoon: true },
@@ -28,7 +28,11 @@ export function AccountNav({ isAdmin }: { isAdmin: boolean }) {
         )}
       >
         {sections.map((item) => {
-          const isActive = !item.comingSoon && pathname === item.href;
+          const isActive =
+            !item.comingSoon &&
+            (pathname === item.href ||
+              (item.href !== "/account" &&
+                pathname.startsWith(`${item.href}/`)));
           if (item.comingSoon) {
             return (
               <li key={item.href} className="shrink-0">

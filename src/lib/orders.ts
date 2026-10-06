@@ -1,5 +1,5 @@
 import "server-only";
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type Stripe from "stripe";
 import { db } from "@/db";
 import {
@@ -10,6 +10,122 @@ import {
   products,
 } from "@/db/schema";
 import { stripe } from "@/lib/stripe";
+
+export type OrderStatus = "paid" | "processing" | "failed";
+
+export type OrderSummary = {
+  id: string;
+  createdAt: Date;
+  status: OrderStatus;
+  currency: string;
+  amountTotalCents: number;
+  itemCount: number;
+  previewImageUrl: string | null;
+};
+
+export type OrderDetailItem = {
+  id: string;
+  productSlug: string;
+  productName: string;
+  size: string | null;
+  quantity: number;
+  unitAmountCents: number;
+  amountCents: number;
+  imageUrl: string | null;
+};
+
+export type OrderDetail = {
+  id: string;
+  createdAt: Date;
+  status: OrderStatus;
+  email: string;
+  currency: string;
+  amountSubtotalCents: number;
+  amountShippingCents: number;
+  amountTotalCents: number;
+  shippingName: string | null;
+  shippingLine1: string | null;
+  shippingLine2: string | null;
+  shippingCity: string | null;
+  shippingPostalCode: string | null;
+  shippingState: string | null;
+  shippingCountry: string | null;
+  items: OrderDetailItem[];
+};
+
+// List a user's orders newest-first for the account history view.
+// Each row carries the first item's image as a visual anchor and a count so
+// the list can read as "N pieces" without a second query.
+export async function listUserOrders(userId: string): Promise<OrderSummary[]> {
+  const rows = await db.query.orders.findMany({
+    where: eq(orders.userId, userId),
+    orderBy: [desc(orders.createdAt)],
+    with: {
+      items: {
+        columns: { id: true, quantity: true, imageUrl: true },
+      },
+    },
+  });
+
+  return rows.map((row) => {
+    const itemCount = row.items.reduce((sum, item) => sum + item.quantity, 0);
+    const previewImageUrl =
+      row.items.find((item) => item.imageUrl)?.imageUrl ?? null;
+    return {
+      id: row.id,
+      createdAt: row.createdAt,
+      status: row.status as OrderStatus,
+      currency: row.currency,
+      amountTotalCents: row.amountTotalCents,
+      itemCount,
+      previewImageUrl,
+    };
+  });
+}
+
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Load one order, scoped to the owning user — a wrong id or another user's id
+// resolves to null so the route can 404 without leaking which case it was.
+export async function getUserOrder(
+  userId: string,
+  orderId: string,
+): Promise<OrderDetail | null> {
+  if (!uuidPattern.test(orderId)) return null;
+  const row = await db.query.orders.findFirst({
+    where: and(eq(orders.id, orderId), eq(orders.userId, userId)),
+    with: { items: true },
+  });
+  if (!row) return null;
+  return {
+    id: row.id,
+    createdAt: row.createdAt,
+    status: row.status as OrderStatus,
+    email: row.email,
+    currency: row.currency,
+    amountSubtotalCents: row.amountSubtotalCents,
+    amountShippingCents: row.amountShippingCents,
+    amountTotalCents: row.amountTotalCents,
+    shippingName: row.shippingName,
+    shippingLine1: row.shippingLine1,
+    shippingLine2: row.shippingLine2,
+    shippingCity: row.shippingCity,
+    shippingPostalCode: row.shippingPostalCode,
+    shippingState: row.shippingState,
+    shippingCountry: row.shippingCountry,
+    items: row.items.map((item) => ({
+      id: item.id,
+      productSlug: item.productSlug,
+      productName: item.productName,
+      size: item.size,
+      quantity: item.quantity,
+      unitAmountCents: item.unitAmountCents,
+      amountCents: item.amountCents,
+      imageUrl: item.imageUrl,
+    })),
+  };
+}
 
 type ItemRow = {
   orderId: string;
