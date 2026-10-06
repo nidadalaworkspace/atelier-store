@@ -3,7 +3,6 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { Container } from "@/components/ui/container";
 import { Eyebrow } from "@/components/ui/eyebrow";
-import { Button } from "@/components/ui/button";
 import { ProductBreadcrumb } from "@/components/site/product-breadcrumb";
 import { requireSession } from "@/lib/session";
 import { getBag } from "@/lib/cart";
@@ -11,14 +10,20 @@ import type { BagLine } from "@/lib/cart-types";
 import { formatCents } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { BagLineControls } from "./bag-line-controls";
+import { CheckoutButton } from "./checkout-button";
+import { CheckoutCancelledNotice } from "./checkout-cancelled-notice";
 import { EmptyBag } from "./empty-bag";
 
 export const metadata: Metadata = {
   title: "Your bag — Atelier",
 };
 
-export default async function BagPage() {
+export default async function BagPage({
+  searchParams,
+}: PageProps<"/bag">) {
   await requireSession("/bag");
+  const params = await searchParams;
+  const cancelled = readFlag(params.checkout) === "cancelled";
   const bag = await getBag();
   const items = bag?.items ?? [];
   const needsAttention = items.filter((l) => l.availability !== "ok").length;
@@ -41,6 +46,10 @@ export default async function BagPage() {
               </p>
             )}
           </div>
+
+          {cancelled && items.length > 0 && (
+            <CheckoutCancelledNotice />
+          )}
 
           {items.length === 0 ? (
             <EmptyBag />
@@ -138,15 +147,7 @@ export default async function BagPage() {
                   </span>
                 </div>
                 <div className="mt-8">
-                  <Button
-                    type="button"
-                    variant="primary"
-                    size="lg"
-                    disabled
-                    className="w-full"
-                  >
-                    Checkout coming soon
-                  </Button>
+                  <CheckoutButton disabled={needsAttention > 0} />
                 </div>
                 <p className="mt-4 text-[0.6875rem] tracking-widest uppercase text-stone-500 text-center">
                   Complimentary signature-packaged delivery, worldwide.
@@ -166,6 +167,11 @@ export default async function BagPage() {
       </article>
     </main>
   );
+}
+
+function readFlag(value: string | string[] | undefined): string | null {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return typeof raw === "string" ? raw : null;
 }
 
 function LineStockBadge({ line }: { line: BagLine }) {

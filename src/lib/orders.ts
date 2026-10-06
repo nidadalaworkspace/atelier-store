@@ -1,0 +1,179 @@
+import "server-only";
+import { eq, inArray, sql } from "drizzle-orm";
+import type Stripe from "stripe";
+import { db } from "@/db";
+import {
+  carts,
+  cartItems,
+  orders,
+  orderItems,
+  products,
+} from "@/db/schema";
+import { stripe } from "@/lib/stripe";
+
+type ItemRow = {
+  orderId: string;
+  productId: string | null;
+  productSlug: string;
+  productName: string;
+  size: string | null;
+  quantity: number;
+  unitAmountCents: number;
+  amountCents: number;
+  imageUrl: string | null;
+};
+
+// The webhook is the single writer of orders. This function is idempotent through
+// the orders.stripe_checkout_session_id UNIQUE constraint — the pre-check SELECT
+// is only a fast path. Stripe retries on non-2xx, and the handler is also allowed
+// to redeliver, so the UNIQUE violation path must succeed quietly.
+export async function fulfillCheckoutSession(sessionId: string): Promise<void> {
+  const existing = await db
+    .select({ id: orders.id })
+    .from(orders)
+    .where(eq(orders.stripeCheckoutSessionId, sessionId))
+    .limit(1);
+  if (existing[0]) return;
+
+  const session = await stripe().checkout.sessions.retrieve(sessionId, {
+    expand: ["line_items.data.price.product", "payment_intent"],
+  });
+
+  // The webhook route already filters, but double-guard — never write an order
+  // from a session whose payment hasn't actually cleared.
+  if (session.payment_status === "unpaid") return;
+
+  const userId = session.metadata?.userId ?? session.client_reference_id;
+  if (!userId) {
+    throw new Error(
+      `fulfillCheckoutSession: session ${sessionId} has no userId in metadata or client_reference_id`,
+    );
+  }
+
+  const lineItems = session.line_items?.data ?? [];
+  if (lineItems.length === 0) {
+    throw new Error(`fulfillCheckoutSession: session ${sessionId} has no line items`);
+  }
+
+  const orderId = crypto.randomUUID();
+  const itemRows: ItemRow[] = lineItems.map((li) => {
+    const product = resolveProduct(li.price?.product);
+    const meta = product?.metadata ?? {};
+    const productId = typeof meta.productId === "string" ? meta.productId : null;
+    const sizeMeta = typeof meta.size === "string" && meta.size.length > 0 ? meta.size : null;
+    const slug = typeof meta.slug === "string" ? meta.slug : "";
+    return {
+      orderId,
+      productId,
+      productSlug: slug,
+      productName: product?.name ?? li.description ?? "",
+      size: sizeMeta,
+      quantity: li.quantity ?? 1,
+      unitAmountCents: li.price?.unit_amount ?? 0,
+      amountCents: li.amount_total,
+      imageUrl: product?.images?.[0] ?? null,
+    };
+  });
+
+  // Look up madeToOrder for every item that still points at a catalogue row,
+  // so stock decrements skip MTO pieces and avoid updating a vanished product.
+  const productIds = itemRows
+    .map((i) => i.productId)
+    .filter((id): id is string => id !== null);
+  const productRows = productIds.length
+    ? await db
+        .select({
+          id: products.id,
+          madeToOrder: products.madeToOrder,
+        })
+        .from(products)
+        .where(inArray(products.id, productIds))
+    : [];
+  const productFlags = new Map(productRows.map((p) => [p.id, p.madeToOrder]));
+
+  const cart = await db
+    .select({ id: carts.id })
+    .from(carts)
+    .where(eq(carts.userId, userId))
+    .limit(1);
+  const cartId = cart[0]?.id ?? null;
+
+  const paymentIntentId =
+    typeof session.payment_intent === "string"
+      ? session.payment_intent
+      : (session.payment_intent?.id ?? null);
+
+  const shipping = session.collected_information?.shipping_details ?? null;
+  const email =
+    session.customer_details?.email ?? session.customer_email ?? "";
+
+  const statements: unknown[] = [
+    db.insert(orders).values({
+      id: orderId,
+      userId,
+      stripeCheckoutSessionId: session.id,
+      stripePaymentIntentId: paymentIntentId,
+      status: "paid",
+      email,
+      currency: session.currency ?? "gbp",
+      amountSubtotalCents: session.amount_subtotal ?? 0,
+      amountShippingCents: session.shipping_cost?.amount_total ?? 0,
+      amountTotalCents: session.amount_total ?? 0,
+      shippingName: shipping?.name ?? null,
+      shippingLine1: shipping?.address?.line1 ?? null,
+      shippingLine2: shipping?.address?.line2 ?? null,
+      shippingCity: shipping?.address?.city ?? null,
+      shippingPostalCode: shipping?.address?.postal_code ?? null,
+      shippingState: shipping?.address?.state ?? null,
+      shippingCountry: shipping?.address?.country ?? null,
+    }),
+    db.insert(orderItems).values(itemRows),
+  ];
+
+  for (const item of itemRows) {
+    if (!item.productId) continue;
+    const madeToOrder = productFlags.get(item.productId);
+    if (madeToOrder !== false) continue; // undefined = product deleted; true = MTO
+    statements.push(
+      db
+        .update(products)
+        .set({
+          stockQuantity: sql`greatest(${products.stockQuantity} - ${item.quantity}, 0)`,
+        })
+        .where(eq(products.id, item.productId)),
+    );
+  }
+
+  if (cartId) {
+    statements.push(db.delete(cartItems).where(eq(cartItems.cartId, cartId)));
+  }
+
+  try {
+    await db.batch(
+      statements as unknown as Parameters<typeof db.batch>[0],
+    );
+  } catch (err) {
+    if (isUniqueViolation(err, "orders_stripe_checkout_session_id_unique")) {
+      // Stripe redelivered between our SELECT and INSERT. The row is there.
+      return;
+    }
+    throw err;
+  }
+}
+
+function resolveProduct(
+  price: Stripe.Price["product"] | undefined,
+): Stripe.Product | null {
+  if (!price) return null;
+  if (typeof price === "string") return null;
+  if (price.deleted) return null;
+  return price;
+}
+
+function isUniqueViolation(err: unknown, constraint: string): boolean {
+  if (!err || typeof err !== "object") return false;
+  const anyErr = err as { code?: string; constraint?: string; message?: string };
+  if (anyErr.code !== "23505") return false;
+  if (anyErr.constraint === constraint) return true;
+  return typeof anyErr.message === "string" && anyErr.message.includes(constraint);
+}

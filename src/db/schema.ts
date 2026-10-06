@@ -6,8 +6,9 @@ import {
   boolean,
   timestamp,
   uniqueIndex,
+  check,
 } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 
 // --- Better Auth tables ----------------------------------------------------
 // Column names match Better Auth's defaults — do not rename, the adapter
@@ -89,6 +90,7 @@ export const userRelations = relations(user, ({ one, many }) => ({
   accounts: many(account),
   cart: one(carts),
   wishlistItems: many(wishlistItems),
+  orders: many(orders),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -258,6 +260,80 @@ export const wishlistItemsRelations = relations(wishlistItems, ({ one }) => ({
   user: one(user, { fields: [wishlistItems.userId], references: [user.id] }),
   product: one(products, {
     fields: [wishlistItems.productId],
+    references: [products.id],
+  }),
+}));
+
+// --- Orders ----------------------------------------------------------------
+// Orders belong to the authenticated customer and are written only by the
+// Stripe webhook. `stripe_checkout_session_id` is UNIQUE — that constraint is
+// the webhook's idempotency key, not the fast-path SELECT in front of it.
+// `order_items` stores the per-line amount Stripe actually charged plus the
+// text snapshot the customer saw at purchase, so a later catalogue rename or
+// re-pricing does not rewrite history.
+
+export const orders = pgTable(
+  "orders",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    stripeCheckoutSessionId: text("stripe_checkout_session_id")
+      .notNull()
+      .unique(),
+    stripePaymentIntentId: text("stripe_payment_intent_id"),
+    status: text("status").notNull(),
+    email: text("email").notNull(),
+    currency: text("currency").notNull(),
+    amountSubtotalCents: integer("amount_subtotal_cents").notNull(),
+    amountShippingCents: integer("amount_shipping_cents").notNull().default(0),
+    amountTotalCents: integer("amount_total_cents").notNull(),
+    shippingName: text("shipping_name"),
+    shippingLine1: text("shipping_line1"),
+    shippingLine2: text("shipping_line2"),
+    shippingCity: text("shipping_city"),
+    shippingPostalCode: text("shipping_postal_code"),
+    shippingState: text("shipping_state"),
+    shippingCountry: text("shipping_country"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    check(
+      "orders_status_check",
+      sql`${table.status} in ('paid', 'processing', 'failed')`,
+    ),
+  ],
+);
+
+export const orderItems = pgTable("order_items", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  orderId: uuid("order_id")
+    .notNull()
+    .references(() => orders.id, { onDelete: "cascade" }),
+  productId: uuid("product_id").references(() => products.id, {
+    onDelete: "set null",
+  }),
+  productSlug: text("product_slug").notNull(),
+  productName: text("product_name").notNull(),
+  size: text("size"),
+  quantity: integer("quantity").notNull(),
+  unitAmountCents: integer("unit_amount_cents").notNull(),
+  amountCents: integer("amount_cents").notNull(),
+  imageUrl: text("image_url"),
+});
+
+export const ordersRelations = relations(orders, ({ one, many }) => ({
+  user: one(user, { fields: [orders.userId], references: [user.id] }),
+  items: many(orderItems),
+}));
+
+export const orderItemsRelations = relations(orderItems, ({ one }) => ({
+  order: one(orders, { fields: [orderItems.orderId], references: [orders.id] }),
+  product: one(products, {
+    fields: [orderItems.productId],
     references: [products.id],
   }),
 }));
