@@ -107,6 +107,11 @@ function parseProductForm(data: FormData): ParseOk | ParseErr {
     return { ok: false, fieldErrors };
   }
 
+  // MTO pieces never carry stock — the webhook decrement skips them, so a
+  // non-zero quantity would silently persist. Normalise server-side so a stale
+  // client can't bypass the UI's disabled input.
+  const madeToOrder = readBool(data, "madeToOrder");
+
   return {
     ok: true,
     input: {
@@ -116,8 +121,8 @@ function parseProductForm(data: FormData): ParseOk | ParseErr {
       // Price arrives as decimal pounds; store as integer pence. Rounding is
       // defensive — the browser's step="0.01" should prevent fractions.
       priceCents: Math.round(priceDollars * 100),
-      stockQuantity,
-      madeToOrder: readBool(data, "madeToOrder"),
+      stockQuantity: madeToOrder ? 0 : stockQuantity,
+      madeToOrder,
       isNew: readBool(data, "isNew"),
       description,
       materials,
@@ -161,8 +166,9 @@ function echoValues(data: FormData): Record<string, string> {
   return out;
 }
 
-function revalidatePublic(slugs: Array<string | undefined>) {
+export async function revalidatePublic(slugs: Array<string | undefined>) {
   revalidatePath("/admin/products");
+  revalidatePath("/admin/stock");
   revalidatePath("/");
   revalidatePath("/new-arrivals");
   revalidatePath("/collections/[slug]", "page");
@@ -214,7 +220,7 @@ export async function createProductAction(
     };
   }
 
-  revalidatePublic([result.slug]);
+  await revalidatePublic([result.slug]);
   redirect(`/admin/products/${result.id}?created=1`);
 }
 
@@ -248,7 +254,7 @@ export async function updateProductAction(
     };
   }
 
-  revalidatePublic([result.slug, result.previousSlug]);
+  await revalidatePublic([result.slug, result.previousSlug]);
   return { ok: true, values: echoValues(formData) };
 }
 
@@ -261,6 +267,6 @@ export async function deleteProductAction(formData: FormData): Promise<void> {
   }
 
   const result = await deleteProduct(id);
-  revalidatePublic([result.ok ? result.slug : undefined]);
+  await revalidatePublic([result.ok ? result.slug : undefined]);
   redirect("/admin/products");
 }

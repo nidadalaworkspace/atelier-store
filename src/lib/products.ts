@@ -12,6 +12,8 @@ export type Product = {
   price: number;
   imageUrl: string;
   isNew: boolean;
+  stockQuantity: number;
+  madeToOrder: boolean;
 };
 
 export type ProductDetail = Product & {
@@ -40,6 +42,8 @@ type ProductCardRow = {
   name: string;
   priceCents: number;
   isNew: boolean;
+  stockQuantity: number;
+  madeToOrder: boolean;
   category: { name: string; slug: string };
   images: { url: string }[];
 };
@@ -51,8 +55,6 @@ type ProductDetailRow = ProductCardRow & {
   reference: string;
   sizes: string[] | null;
   details: string[];
-  stockQuantity: number;
-  madeToOrder: boolean;
   images: { url: string; position: number }[];
 };
 
@@ -66,6 +68,8 @@ function mapProduct(row: ProductCardRow): Product {
     price: row.priceCents / 100,
     imageUrl: row.images[0]?.url ?? "",
     isNew: row.isNew,
+    stockQuantity: row.stockQuantity,
+    madeToOrder: row.madeToOrder,
   };
 }
 
@@ -506,6 +510,38 @@ export async function deleteProduct(
   try {
     const rows = await db
       .delete(products)
+      .where(eq(products.id, id))
+      .returning({ slug: products.slug });
+    if (!rows[0]) return { ok: false, error: "not-found" };
+    return { ok: true, slug: rows[0].slug };
+  } catch {
+    return { ok: false, error: "unknown" };
+  }
+}
+
+export type StockWriteInput = {
+  stockQuantity: number;
+  madeToOrder: boolean;
+};
+
+export type StockWriteResult =
+  | { ok: true; slug: string }
+  | { ok: false; error: "not-found" | "unknown" };
+
+// Narrow stock-only write used by the /admin/stock bulk editor. Enforces the
+// single invariant the catalogue has around inventory: an MTO piece never
+// carries stored stock, because the webhook decrement skips MTO rows and a
+// non-zero quantity would silently persist forever.
+export async function updateProductStock(
+  id: string,
+  input: StockWriteInput,
+): Promise<StockWriteResult> {
+  if (!uuidPattern.test(id)) return { ok: false, error: "not-found" };
+  const stockQuantity = input.madeToOrder ? 0 : input.stockQuantity;
+  try {
+    const rows = await db
+      .update(products)
+      .set({ stockQuantity, madeToOrder: input.madeToOrder })
       .where(eq(products.id, id))
       .returning({ slug: products.slug });
     if (!rows[0]) return { ok: false, error: "not-found" };

@@ -40,6 +40,8 @@ export async function getWishlist(): Promise<Product[]> {
     price: row.product.priceCents / 100,
     imageUrl: row.product.images[0]?.url ?? "",
     isNew: row.product.isNew,
+    stockQuantity: row.product.stockQuantity,
+    madeToOrder: row.product.madeToOrder,
   }));
 }
 
