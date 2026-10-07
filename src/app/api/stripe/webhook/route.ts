@@ -1,5 +1,8 @@
 import type Stripe from "stripe";
-import { fulfillCheckoutSession } from "@/lib/orders";
+import {
+  fulfillCheckoutSession,
+  markCheckoutSessionFailed,
+} from "@/lib/orders";
 import { stripe, webhookSecret } from "@/lib/stripe";
 
 // Signature verification uses the raw request bytes, so Node runtime is required
@@ -43,6 +46,15 @@ export async function POST(request: Request): Promise<Response> {
         const session = event.data.object;
         if (session.payment_status === "unpaid") break;
         await fulfillCheckoutSession(session.id);
+        break;
+      }
+      case "checkout.session.async_payment_failed": {
+        // Delayed-settlement methods (bank debits, redirects) can land here
+        // after the session completed with payment_status=unpaid. We only
+        // insert order rows on success, so the common case is "no row yet";
+        // markCheckoutSessionFailed is a no-op when nothing matches.
+        const session = event.data.object;
+        await markCheckoutSessionFailed(session.id);
         break;
       }
       default:

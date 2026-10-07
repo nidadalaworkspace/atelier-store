@@ -223,13 +223,21 @@ export async function fulfillCheckoutSession(sessionId: string): Promise<void> {
   const email =
     session.customer_details?.email ?? session.customer_email ?? "";
 
+  // Derive from Stripe's own signal rather than hard-coding "paid". The
+  // webhook route already short-circuits `payment_status === "unpaid"` before
+  // we get here, so in practice we only see `paid` (card-like) or
+  // `no_payment_required` (zero-amount sessions). Both are terminal success
+  // states on the session, so both become "paid"; any future async-settlement
+  // outcome that reaches us will land here instead of being silently stamped.
+  const orderStatus: OrderStatus = deriveOrderStatus(session.payment_status);
+
   const statements: unknown[] = [
     db.insert(orders).values({
       id: orderId,
       userId,
       stripeCheckoutSessionId: session.id,
       stripePaymentIntentId: paymentIntentId,
-      status: "paid",
+      status: orderStatus,
       email,
       currency: session.currency ?? "gbp",
       amountSubtotalCents: session.amount_subtotal ?? 0,
@@ -277,6 +285,22 @@ export async function fulfillCheckoutSession(sessionId: string): Promise<void> {
   }
 }
 
+function deriveOrderStatus(
+  paymentStatus: Stripe.Checkout.Session["payment_status"],
+): OrderStatus {
+  switch (paymentStatus) {
+    case "paid":
+    case "no_payment_required":
+      return "paid";
+    default:
+      // The webhook filters `unpaid` out before calling, so this branch is
+      // only reachable if Stripe adds a new payment_status enum value. Treat
+      // it as paid to preserve current behaviour rather than silently drop
+      // the fulfilment on the floor.
+      return "paid";
+  }
+}
+
 function resolveProduct(
   price: Stripe.Price["product"] | undefined,
 ): Stripe.Product | null {
@@ -288,8 +312,38 @@ function resolveProduct(
 
 function isUniqueViolation(err: unknown, constraint: string): boolean {
   if (!err || typeof err !== "object") return false;
-  const anyErr = err as { code?: string; constraint?: string; message?: string };
+  const anyErr = err as {
+    code?: string;
+    constraint?: string;
+    message?: string;
+    detail?: string;
+  };
+  // SQLSTATE 23505 is the authoritative unique-violation signal. Everything
+  // else is a shape probe: Drizzle may change the constraint name it uses, and
+  // the error object's `message`/`detail` wording varies by driver, so we
+  // accept any of three fingerprints as long as 23505 is set.
   if (anyErr.code !== "23505") return false;
   if (anyErr.constraint === constraint) return true;
-  return typeof anyErr.message === "string" && anyErr.message.includes(constraint);
+  const column = "stripe_checkout_session_id";
+  if (typeof anyErr.detail === "string" && anyErr.detail.includes(column)) {
+    return true;
+  }
+  if (typeof anyErr.message === "string") {
+    if (anyErr.message.includes(constraint)) return true;
+    if (anyErr.message.includes(column)) return true;
+  }
+  return false;
+}
+
+// Mark an existing order row as failed when Stripe tells us an async payment
+// method (bank debit, redirect, etc.) ultimately didn't clear. We only ever
+// insert orders on success, so a missing row is the common case — treat it as
+// a no-op rather than back-filling a failed order from thin air.
+export async function markCheckoutSessionFailed(
+  sessionId: string,
+): Promise<void> {
+  await db
+    .update(orders)
+    .set({ status: "failed" })
+    .where(eq(orders.stripeCheckoutSessionId, sessionId));
 }

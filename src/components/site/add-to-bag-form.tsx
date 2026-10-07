@@ -133,7 +133,7 @@ function SubmitButton({
   const label = pending
     ? "Adding…"
     : soldOut
-      ? "Join the waitlist"
+      ? "Currently unavailable"
       : needsSize && !hasSize
         ? "Select a size"
         : madeToOrder

@@ -8,6 +8,7 @@ import { Container } from "@/components/ui/container";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { Button } from "@/components/ui/button";
 import { formatCents } from "@/lib/format";
+import { requireSession } from "@/lib/session";
 import { PendingOrder } from "./pending-order";
 
 export const metadata: Metadata = {
@@ -16,6 +17,9 @@ export const metadata: Metadata = {
 
 // The webhook is the only writer. This page just reads whatever row exists —
 // a browser hitting /checkout/success never flips an order to paid on its own.
+// Order details are PII (email, shipping address, items, totals), so we gate
+// on a signed-in session AND verify the row belongs to the requesting user
+// before rendering anything beyond the generic "payment received" view.
 export default async function CheckoutSuccessPage({
   searchParams,
 }: PageProps<"/checkout/success">) {
@@ -27,12 +31,27 @@ export default async function CheckoutSuccessPage({
     return <MissingSession />;
   }
 
+  // Preserve the full return path so the user lands back on their receipt
+  // after signing in, not just on a bare /checkout/success with no id.
+  const session = await requireSession(
+    `/checkout/success?session_id=${encodeURIComponent(sessionId)}`,
+  );
+
   const order = await db.query.orders.findFirst({
     where: eq(orders.stripeCheckoutSessionId, sessionId),
     with: { items: true },
   });
 
+  // No row yet — the webhook may still be in-flight. Fall back to the pending
+  // poll view, which only reveals confirmation state (not order contents).
   if (!order) {
+    return <PendingOrder sessionId={sessionId} />;
+  }
+
+  // Row exists but belongs to someone else. Do not leak email / shipping /
+  // items / totals. Show the same neutral "payment received" shape we show
+  // while waiting, without any order lookup.
+  if (order.userId !== session.user.id) {
     return <PendingOrder sessionId={sessionId} />;
   }
 
