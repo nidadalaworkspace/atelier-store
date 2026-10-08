@@ -29,3 +29,14 @@ export async function requireAdmin(redirectTo: string) {
   if (session.user.role !== "admin") notFound();
   return session;
 }
+
+// Action-side analogue of requireAdmin. notFound() in a server action surfaces
+// as an opaque 500 "Connection closed" in the Flight response rather than a
+// clean 404, so we redirect non-admins (and the rare signed-out request that
+// slipped past the proxy) to the home page instead. The proxy still gates GET
+// requests to /admin for signed-out users — this covers the action POST path.
+export async function requireAdminForAction() {
+  const session = await getSession();
+  if (!session || session.user.role !== "admin") redirect("/");
+  return session;
+}

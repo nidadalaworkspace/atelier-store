@@ -34,8 +34,6 @@ type ProductFormInitial = {
 type Props = {
   categories: CategoryOption[];
   initial?: ProductFormInitial;
-  // When provided, a delete section is rendered under the form on edit pages.
-  deleteSlot?: React.ReactNode;
 };
 
 type FieldName =
@@ -55,7 +53,7 @@ type FieldName =
   | "madeToOrder"
   | "isNew";
 
-export function ProductForm({ categories, initial, deleteSlot }: Props) {
+export function ProductForm({ categories, initial }: Props) {
   const isEdit = Boolean(initial);
   const action = isEdit ? updateProductAction : createProductAction;
   const [state, formAction] = useActionState<
@@ -278,9 +276,6 @@ export function ProductForm({ categories, initial, deleteSlot }: Props) {
         </div>
       </div>
 
-      {deleteSlot && (
-        <section className="hairline-t pt-8">{deleteSlot}</section>
-      )}
     </form>
   );
 }

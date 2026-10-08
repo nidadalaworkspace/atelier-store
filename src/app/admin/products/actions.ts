@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { ALLOWED_IMAGE_HOSTS, isAllowedImageHost } from "@/lib/image-hosts";
 import {
   createProduct,
   deleteProduct,
@@ -9,7 +10,7 @@ import {
   type ProductWriteInput,
   type ProductWriteResult,
 } from "@/lib/products";
-import { requireAdmin } from "@/lib/session";
+import { requireAdminForAction } from "@/lib/session";
 
 export type ProductFormState = {
   ok: boolean;
@@ -90,6 +91,19 @@ function parseProductForm(data: FormData): ParseOk | ParseErr {
     fieldErrors.imageUrl = "A primary image URL is required";
   } else if (!urlPattern.test(imageUrl)) {
     fieldErrors.imageUrl = "Must be a full http:// or https:// URL";
+  } else {
+    // next/image refuses any hostname outside remotePatterns, which 500s the
+    // PDP for a product saved with a disallowed host. Validate here so the
+    // admin gets a field error instead of a silently-broken catalogue entry.
+    let host: string | null = null;
+    try {
+      host = new URL(imageUrl).hostname;
+    } catch {
+      fieldErrors.imageUrl = "Must be a full http:// or https:// URL";
+    }
+    if (host && !isAllowedImageHost(host)) {
+      fieldErrors.imageUrl = `Host must be one of: ${ALLOWED_IMAGE_HOSTS.join(", ")}`;
+    }
   }
   if (!imageAlt) fieldErrors.imageAlt = "Alt text is required";
 
@@ -199,7 +213,7 @@ export async function createProductAction(
   _prev: ProductFormState | undefined,
   formData: FormData,
 ): Promise<ProductFormState> {
-  await requireAdmin("/admin/products");
+  await requireAdminForAction();
 
   const parsed = parseProductForm(formData);
   if (!parsed.ok) {
@@ -231,7 +245,7 @@ export async function updateProductAction(
   _prev: ProductFormState | undefined,
   formData: FormData,
 ): Promise<ProductFormState> {
-  await requireAdmin("/admin/products");
+  await requireAdminForAction();
 
   const id = readString(formData, "id");
   if (!uuidPattern.test(id)) {
@@ -262,7 +276,7 @@ export async function updateProductAction(
 }
 
 export async function deleteProductAction(formData: FormData): Promise<void> {
-  await requireAdmin("/admin/products");
+  await requireAdminForAction();
 
   // Sentinel field set by DeleteProductButton after a native confirm() prompt.
   // A cross-origin form POST will not carry this, so we refuse the action

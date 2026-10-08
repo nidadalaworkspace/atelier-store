@@ -1,7 +1,7 @@
 "use server";
 
 import { updateProductStock } from "@/lib/products";
-import { requireAdmin } from "@/lib/session";
+import { requireAdminForAction } from "@/lib/session";
 import { revalidatePublic } from "@/app/admin/products/actions";
 
 export type StockRowState = {
@@ -40,7 +40,7 @@ export async function updateStockAction(
   _prev: StockRowState | undefined,
   formData: FormData,
 ): Promise<StockRowState> {
-  await requireAdmin("/admin/stock");
+  await requireAdminForAction();
 
   const id = readString(formData, "id");
   const madeToOrder = readBool(formData, "madeToOrder");

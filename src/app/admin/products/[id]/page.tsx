@@ -75,22 +75,26 @@ export default async function EditProductPage({
           primaryImage:
             product.images.find((i) => i.position === 0) ?? null,
         }}
-        deleteSlot={
-          <div className="flex flex-col gap-3 max-w-xl">
-            <Eyebrow>Danger zone</Eyebrow>
-            <p className="text-sm text-stone-600 leading-relaxed">
-              Deleting a product removes it from the catalogue and every active
-              bag. Past orders keep their snapshot — the line item&apos;s
-              product_id is nulled out, the name, slug and price it was sold at
-              are preserved.
-            </p>
-            <DeleteProductButton
-              productId={product.id}
-              productName={product.name}
-            />
-          </div>
-        }
       />
+
+      {/* Delete lives as a sibling of ProductForm, not inside its <form>: nested
+          forms are forbidden by the HTML spec and strip the inner form's
+          action binding, so the delete button only worked via JS. */}
+      <section className="hairline-t pt-8">
+        <div className="flex flex-col gap-3 max-w-xl">
+          <Eyebrow>Danger zone</Eyebrow>
+          <p className="text-sm text-stone-600 leading-relaxed">
+            Deleting a product removes it from the catalogue and every active
+            bag. Past orders keep their snapshot — the line item&apos;s
+            product_id is nulled out, the name, slug and price it was sold at
+            are preserved.
+          </p>
+          <DeleteProductButton
+            productId={product.id}
+            productName={product.name}
+          />
+        </div>
+      </section>
     </div>
   );
 }
