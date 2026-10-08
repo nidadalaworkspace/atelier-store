@@ -1,5 +1,38 @@
 export const PASSWORD_MIN_LENGTH = 8;
 
+/**
+ * Validate a `?redirect=` query parameter before trusting it as a navigation
+ * target. Only same-origin absolute paths are accepted — anything containing a
+ * scheme (`http://`, `javascript:`, `//evil.com`) or backslash (`/\evil.com`,
+ * which some browsers normalise toward `//evil.com`) is rejected so the sign-in
+ * flow can't be weaponised into an open redirect.
+ */
+export function sanitizeRedirect(
+  raw: string | string[] | undefined,
+  fallback = "/account",
+): string {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (typeof value !== "string" || value.length === 0) return fallback;
+  if (value[0] !== "/") return fallback;
+  // Reject protocol-relative (`//host`), scheme-prefixed (`/http://`), and any
+  // backslash-based bypass. These are the common open-redirect vectors against
+  // naive "starts with /" checks.
+  if (value.startsWith("//")) return fallback;
+  if (value.startsWith("/\\")) return fallback;
+  if (value.includes("\\")) return fallback;
+  if (/^\/[a-z][a-z0-9+\-.]*:/i.test(value)) return fallback;
+  // Final parse against a dummy origin: anything that produces a different
+  // origin (e.g. encoded tricks) is rejected.
+  try {
+    const base = "https://atelier.internal";
+    const url = new URL(value, base);
+    if (url.origin !== base) return fallback;
+    return url.pathname + url.search + url.hash;
+  } catch {
+    return fallback;
+  }
+}
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function validateName(value: string): string | null {

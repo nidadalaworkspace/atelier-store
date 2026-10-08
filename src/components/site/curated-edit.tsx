@@ -16,10 +16,10 @@ export async function CuratedEdit() {
             <h2 className="display-lg mt-4">For someone considered.</h2>
           </div>
           <TextLink
-            href="/gifts"
+            href="/new-arrivals"
             className="text-[0.6875rem] tracking-widest uppercase self-start sm:self-end"
           >
-            Explore all gifts
+            Explore new arrivals
           </TextLink>
         </header>
 

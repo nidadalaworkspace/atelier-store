@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Button } from "@/components/ui/button";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { getAdminProduct, listCategoriesForSelect } from "@/lib/products";
 import { requireAdmin } from "@/lib/session";
-import { deleteProductAction } from "../actions";
 import { ProductForm } from "../product-form";
+import { DeleteProductButton } from "./delete-product-button";
 
 export const metadata: Metadata = {
   title: "Edit product — Admin",
@@ -81,15 +80,14 @@ export default async function EditProductPage({
             <Eyebrow>Danger zone</Eyebrow>
             <p className="text-sm text-stone-600 leading-relaxed">
               Deleting a product removes it from the catalogue and every active
-              bag. Past orders keep their snapshot — line items go to a
-              placeholder reference.
+              bag. Past orders keep their snapshot — the line item&apos;s
+              product_id is nulled out, the name, slug and price it was sold at
+              are preserved.
             </p>
-            <form action={deleteProductAction} className="mt-2">
-              <input type="hidden" name="id" value={product.id} />
-              <Button type="submit" variant="secondary" size="sm">
-                Delete product
-              </Button>
-            </form>
+            <DeleteProductButton
+              productId={product.id}
+              productName={product.name}
+            />
           </div>
         }
       />

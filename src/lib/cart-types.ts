@@ -31,7 +31,14 @@ export type CartActionError =
   | "not-found"
   | "out-of-stock"
   | "exceeds-stock"
+  | "quantity-limit"
+  | "invalid-size"
   | "invalid-input";
+
+// Hard upper bound on per-line quantity. The UI shows a quantity stepper, so
+// anything above this is either a mistake or an abuse attempt; applies to both
+// addToBag (fresh add) and updateQuantity (edit from the bag).
+export const MAX_LINE_QUANTITY = 99;
 
 export type CartActionResult =
   | { ok: true }

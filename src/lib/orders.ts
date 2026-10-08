@@ -63,6 +63,9 @@ export async function listUserOrders(userId: string): Promise<OrderSummary[]> {
     with: {
       items: {
         columns: { id: true, quantity: true, imageUrl: true },
+        // Stable id order so the preview image doesn't flicker between renders;
+        // Drizzle's relational findMany returns an undefined order without this.
+        orderBy: (item, { asc }) => asc(item.id),
       },
     },
   });
@@ -85,6 +88,64 @@ export async function listUserOrders(userId: string): Promise<OrderSummary[]> {
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Load the order written for a given Stripe Checkout Session, scoped to the
+// requesting user. The success page uses this: it must not render order PII
+// (email, shipping, totals) for a session that belongs to someone else. The
+// three return states let the caller distinguish:
+//   null                — no row yet; webhook probably still in flight → pending
+//   { kind: "foreign" } — row exists but belongs to another user → generic view
+//   { kind: "owned", order } — the signed-in user's own receipt → full view
+export type OrderBySessionResult =
+  | null
+  | { kind: "foreign" }
+  | { kind: "owned"; order: OrderDetail };
+
+export async function getOrderBySessionIdForUser(
+  sessionId: string,
+  userId: string,
+): Promise<OrderBySessionResult> {
+  const row = await db.query.orders.findFirst({
+    where: eq(orders.stripeCheckoutSessionId, sessionId),
+    with: {
+      items: {
+        orderBy: (item, { asc }) => asc(item.id),
+      },
+    },
+  });
+  if (!row) return null;
+  if (row.userId !== userId) return { kind: "foreign" };
+  return {
+    kind: "owned",
+    order: {
+      id: row.id,
+      createdAt: row.createdAt,
+      status: row.status as OrderStatus,
+      email: row.email,
+      currency: row.currency,
+      amountSubtotalCents: row.amountSubtotalCents,
+      amountShippingCents: row.amountShippingCents,
+      amountTotalCents: row.amountTotalCents,
+      shippingName: row.shippingName,
+      shippingLine1: row.shippingLine1,
+      shippingLine2: row.shippingLine2,
+      shippingCity: row.shippingCity,
+      shippingPostalCode: row.shippingPostalCode,
+      shippingState: row.shippingState,
+      shippingCountry: row.shippingCountry,
+      items: row.items.map((item) => ({
+        id: item.id,
+        productSlug: item.productSlug,
+        productName: item.productName,
+        size: item.size,
+        quantity: item.quantity,
+        unitAmountCents: item.unitAmountCents,
+        amountCents: item.amountCents,
+        imageUrl: item.imageUrl,
+      })),
+    },
+  };
+}
 
 // Load one order, scoped to the owning user — a wrong id or another user's id
 // resolves to null so the route can 404 without leaking which case it was.
@@ -296,7 +357,11 @@ function deriveOrderStatus(
       // The webhook filters `unpaid` out before calling, so this branch is
       // only reachable if Stripe adds a new payment_status enum value. Treat
       // it as paid to preserve current behaviour rather than silently drop
-      // the fulfilment on the floor.
+      // the fulfilment on the floor — but warn loudly so a new enum shows up
+      // in logs instead of silently being stamped as "paid".
+      console.warn(
+        `[fulfillCheckoutSession] unknown Stripe payment_status "${paymentStatus}" — defaulting to "paid"`,
+      );
       return "paid";
   }
 }

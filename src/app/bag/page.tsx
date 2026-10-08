@@ -47,9 +47,7 @@ export default async function BagPage({
             )}
           </div>
 
-          {cancelled && items.length > 0 && (
-            <CheckoutCancelledNotice />
-          )}
+          {cancelled && <CheckoutCancelledNotice />}
 
           {items.length === 0 ? (
             <EmptyBag />

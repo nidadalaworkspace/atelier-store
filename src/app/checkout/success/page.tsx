@@ -1,13 +1,11 @@
 import Image from "next/image";
 import Link from "next/link";
-import { eq } from "drizzle-orm";
 import type { Metadata } from "next";
-import { db } from "@/db";
-import { orders } from "@/db/schema";
 import { Container } from "@/components/ui/container";
 import { Eyebrow } from "@/components/ui/eyebrow";
 import { Button } from "@/components/ui/button";
 import { formatCents } from "@/lib/format";
+import { getOrderBySessionIdForUser } from "@/lib/orders";
 import { requireSession } from "@/lib/session";
 import { PendingOrder } from "./pending-order";
 
@@ -37,23 +35,15 @@ export default async function CheckoutSuccessPage({
     `/checkout/success?session_id=${encodeURIComponent(sessionId)}`,
   );
 
-  const order = await db.query.orders.findFirst({
-    where: eq(orders.stripeCheckoutSessionId, sessionId),
-    with: { items: true },
-  });
-
-  // No row yet — the webhook may still be in-flight. Fall back to the pending
-  // poll view, which only reveals confirmation state (not order contents).
-  if (!order) {
+  // The three states collapse to two UIs: own-receipt (full detail) and
+  // anything-else (neutral pending view). Showing the pending view for a
+  // foreign-user row prevents leaking email / shipping / items / totals via a
+  // guessed session_id.
+  const result = await getOrderBySessionIdForUser(sessionId, session.user.id);
+  if (!result || result.kind === "foreign") {
     return <PendingOrder sessionId={sessionId} />;
   }
-
-  // Row exists but belongs to someone else. Do not leak email / shipping /
-  // items / totals. Show the same neutral "payment received" shape we show
-  // while waiting, without any order lookup.
-  if (order.userId !== session.user.id) {
-    return <PendingOrder sessionId={sessionId} />;
-  }
+  const { order } = result;
 
   const shippingLines = [
     order.shippingName,

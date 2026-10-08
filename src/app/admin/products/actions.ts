@@ -221,7 +221,10 @@ export async function createProductAction(
   }
 
   await revalidatePublic([result.slug]);
-  redirect(`/admin/products/${result.id}?created=1`);
+  // redirect() returns `never`; `return`ing it keeps the function's declared
+  // ProductFormState shape honest for any caller or future refactor that
+  // forgets the success path is terminal.
+  return redirect(`/admin/products/${result.id}?created=1`);
 }
 
 export async function updateProductAction(
@@ -260,6 +263,13 @@ export async function updateProductAction(
 
 export async function deleteProductAction(formData: FormData): Promise<void> {
   await requireAdmin("/admin/products");
+
+  // Sentinel field set by DeleteProductButton after a native confirm() prompt.
+  // A cross-origin form POST will not carry this, so we refuse the action
+  // rather than destructively deleting on a drive-by submit.
+  if (readString(formData, "confirm") !== "yes") {
+    redirect("/admin/products");
+  }
 
   const id = readString(formData, "id");
   if (!uuidPattern.test(id)) {

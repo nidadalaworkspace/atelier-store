@@ -3,6 +3,9 @@ import { asc, count, eq, ilike, isNotNull, or } from "drizzle-orm";
 import { db } from "@/db";
 import { categories, productImages, products } from "@/db/schema";
 
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export type Product = {
   id: string;
   slug: string;
@@ -19,8 +22,6 @@ export type Product = {
 export type ProductDetail = Product & {
   description: string;
   gallery: string[];
-  stockQuantity: number;
-  madeToOrder: boolean;
   sizes?: string[];
   details: string[];
   materials: string;
@@ -78,8 +79,6 @@ function mapProductDetail(row: ProductDetailRow): ProductDetail {
     ...mapProduct(row),
     description: row.description,
     gallery: row.images.map((i) => i.url),
-    stockQuantity: row.stockQuantity,
-    madeToOrder: row.madeToOrder,
     sizes: row.sizes ?? undefined,
     details: row.details,
     materials: row.materials,
@@ -138,8 +137,42 @@ export async function getRelatedProducts(
   slug: string,
   limit = 4,
 ): Promise<Product[]> {
-  const rows = await db.query.products.findMany({
-    where: (p, { ne }) => ne(p.slug, slug),
+  // "Related" means other pieces from the same category — a Jewellery PDP
+  // should not recommend Outerwear. We look up the anchor product's categoryId
+  // first, then pull siblings; if the category only has one piece (just the
+  // anchor itself), fall back to newest-first across the catalogue so the rail
+  // isn't empty.
+  const anchor = await db.query.products.findFirst({
+    where: (p, { eq }) => eq(p.slug, slug),
+    columns: { categoryId: true },
+  });
+
+  const relatedRows = anchor
+    ? await db.query.products.findMany({
+        where: (p, { and, eq, ne }) =>
+          and(eq(p.categoryId, anchor.categoryId), ne(p.slug, slug)),
+        with: {
+          category: true,
+          images: {
+            where: (image, { eq }) => eq(image.position, 0),
+            limit: 1,
+          },
+        },
+        orderBy: (p, { desc }) => desc(p.createdAt),
+        limit,
+      })
+    : [];
+
+  if (relatedRows.length >= limit) return relatedRows.map(mapProduct);
+
+  // Top up with newest-first across the catalogue, excluding anything already
+  // picked above and the anchor itself.
+  const exclude = new Set<string>([slug, ...relatedRows.map((r) => r.slug)]);
+  const topUp = await db.query.products.findMany({
+    where: (p, { ne, notInArray }) =>
+      exclude.size > 1
+        ? notInArray(p.slug, Array.from(exclude))
+        : ne(p.slug, slug),
     with: {
       category: true,
       images: {
@@ -148,9 +181,10 @@ export async function getRelatedProducts(
       },
     },
     orderBy: (p, { desc }) => desc(p.createdAt),
-    limit,
+    limit: limit - relatedRows.length,
   });
-  return rows.map(mapProduct);
+
+  return [...relatedRows, ...topUp].map(mapProduct);
 }
 
 export async function getAllProductSlugs(): Promise<{ slug: string }[]> {
@@ -551,9 +585,6 @@ export async function updateProductStock(
   }
 }
 
-const uuidPattern =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 function mapWriteError(err: unknown): ProductWriteResult {
   if (!err || typeof err !== "object") {
     return { ok: false, error: "unknown" };
@@ -593,11 +624,15 @@ export async function getCollections(): Promise<Collection[]> {
     .groupBy(categories.id)
     .orderBy(asc(categories.createdAt));
 
-  return rows.map((r) => ({
-    slug: r.slug,
-    name: r.name,
-    tagline: r.tagline ?? "",
-    pieces: Number(r.pieces),
-    imageUrl: r.imageUrl as string,
-  }));
+  return rows
+    .filter(
+      (r): r is typeof r & { imageUrl: string } => r.imageUrl !== null,
+    )
+    .map((r) => ({
+      slug: r.slug,
+      name: r.name,
+      tagline: r.tagline ?? "",
+      pieces: Number(r.pieces),
+      imageUrl: r.imageUrl,
+    }));
 }

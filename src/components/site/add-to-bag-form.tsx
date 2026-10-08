@@ -157,12 +157,16 @@ function errorCopy(result: Exclude<CartActionResult, { ok: true }>): string {
   switch (result.error) {
     case "exceeds-stock":
       return `Only ${result.available ?? 0} available`;
+    case "quantity-limit":
+      return `You can add up to ${result.available ?? 0} more of this item`;
     case "out-of-stock":
       return "Currently unavailable";
     case "not-found":
       return "This piece is no longer available";
     case "unauthenticated":
       return "Please sign in to save pieces to your bag";
+    case "invalid-size":
+      return "Please select a size";
     case "invalid-input":
       return "Something went wrong — try again";
   }

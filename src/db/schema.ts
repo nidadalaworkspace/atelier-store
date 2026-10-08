@@ -6,6 +6,7 @@ import {
   boolean,
   timestamp,
   uniqueIndex,
+  unique,
   check,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
@@ -209,11 +210,13 @@ export const cartItems = pgTable(
       .defaultNow(),
   },
   (table) => [
-    uniqueIndex("cart_items_cart_product_size_unique").on(
-      table.cartId,
-      table.productId,
-      table.size,
-    ),
+    // NULLS NOT DISTINCT is required so unsized products (size IS NULL) still
+    // dedupe. Postgres' default treats NULLs as distinct, which would let two
+    // concurrent addToBag calls both pass the SELECT and insert duplicates.
+    // The chainable only exists on `unique()` constraints, not `uniqueIndex()`.
+    unique("cart_items_cart_product_size_unique")
+      .on(table.cartId, table.productId, table.size)
+      .nullsNotDistinct(),
   ],
 );
 

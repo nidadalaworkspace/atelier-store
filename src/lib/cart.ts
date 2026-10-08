@@ -3,11 +3,12 @@ import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { carts, cartItems, products } from "@/db/schema";
 import { getSession } from "@/lib/session";
-import type {
-  BagLine,
-  BagView,
-  CartActionResult,
-  LineAvailability,
+import {
+  MAX_LINE_QUANTITY,
+  type BagLine,
+  type BagView,
+  type CartActionResult,
+  type LineAvailability,
 } from "@/lib/cart-types";
 
 type AddInput = {
@@ -88,9 +89,10 @@ export async function getBag(): Promise<BagView | null> {
     },
   });
 
-  if (!cart) {
-    return { id: "", items: [], subtotalCents: 0, itemCount: 0 };
-  }
+  // No cart row at all means no bag — callers already treat `null` as "empty
+  // or signed-out", so there's no reason to synthesize a BagView with a fake
+  // UUID that could leak into checkout metadata if a caller forgot to guard.
+  if (!cart) return null;
 
   const lines: BagLine[] = cart.items.map((line) => {
     const unitCents = line.product.priceCents;
@@ -128,15 +130,32 @@ export async function addToBag(input: AddInput): Promise<CartActionResult> {
   if (!userId) return { ok: false, error: "unauthenticated" };
 
   const { productId, size, quantity } = input;
-  if (!productId || !Number.isInteger(quantity) || quantity < 1) {
+  if (
+    !productId ||
+    !Number.isInteger(quantity) ||
+    quantity < 1 ||
+    quantity > MAX_LINE_QUANTITY
+  ) {
     return { ok: false, error: "invalid-input" };
   }
 
   const product = await db.query.products.findFirst({
     where: eq(products.id, productId),
-    columns: { id: true, stockQuantity: true, madeToOrder: true },
+    columns: { id: true, stockQuantity: true, madeToOrder: true, sizes: true },
   });
   if (!product) return { ok: false, error: "not-found" };
+
+  // Size is a schema contract: a product either declares a sized range or it
+  // doesn't. The client UI enforces this; re-check here so a scripted POST
+  // can't produce a sized-garment line with `size = null`.
+  const productSizes = product.sizes ?? [];
+  if (productSizes.length > 0) {
+    if (!size || !productSizes.includes(size)) {
+      return { ok: false, error: "invalid-size" };
+    }
+  } else if (size !== null) {
+    return { ok: false, error: "invalid-size" };
+  }
 
   if (!product.madeToOrder && product.stockQuantity <= 0) {
     return { ok: false, error: "out-of-stock", available: 0 };
@@ -154,6 +173,14 @@ export async function addToBag(input: AddInput): Promise<CartActionResult> {
   });
 
   const desired = (existing?.quantity ?? 0) + quantity;
+
+  if (desired > MAX_LINE_QUANTITY) {
+    return {
+      ok: false,
+      error: "quantity-limit",
+      available: Math.max(0, MAX_LINE_QUANTITY - (existing?.quantity ?? 0)),
+    };
+  }
 
   if (!product.madeToOrder && desired > product.stockQuantity) {
     return {
@@ -207,7 +234,11 @@ export async function updateQuantity(
   if (!userId) return { ok: false, error: "unauthenticated" };
 
   const { lineId, quantity } = input;
-  if (!lineId || !Number.isInteger(quantity)) {
+  if (
+    !lineId ||
+    !Number.isInteger(quantity) ||
+    quantity > MAX_LINE_QUANTITY
+  ) {
     return { ok: false, error: "invalid-input" };
   }
 

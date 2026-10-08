@@ -28,7 +28,10 @@ export function BagLineControls({ line }: Props) {
     fd.set("lineId", line.id);
     fd.set("quantity", String(nextQty));
     startTransition(() => {
-      setOptimisticQty(Math.max(nextQty, 1));
+      // Mirror the server's semantics: qty 0 deletes the line, so the display
+      // can drop below 1 — pinning at 1 would show stale "1" after a
+      // "Remove unavailable" tap until revalidation strips the row.
+      setOptimisticQty(nextQty);
       dispatchUpdate(fd);
     });
   }
@@ -147,12 +150,16 @@ function errorCopy(result: Exclude<CartActionResult, { ok: true }>): string {
   switch (result.error) {
     case "exceeds-stock":
       return `Only ${result.available ?? 0} available.`;
+    case "quantity-limit":
+      return `You can add up to ${result.available ?? 0} more of this item.`;
     case "out-of-stock":
       return "No longer available.";
     case "not-found":
       return "This line is no longer in your bag.";
     case "unauthenticated":
       return "Please sign in again.";
+    case "invalid-size":
+      return "Please select a valid size.";
     case "invalid-input":
       return "Something went wrong — try again.";
   }

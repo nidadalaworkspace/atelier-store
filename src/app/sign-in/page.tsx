@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Container } from "@/components/ui/container";
 import { Eyebrow } from "@/components/ui/eyebrow";
+import { sanitizeRedirect } from "@/lib/auth-validation";
 import { SignInForm } from "./sign-in-form";
 
 export const metadata: Metadata = {
@@ -8,17 +9,11 @@ export const metadata: Metadata = {
   description: "Sign in to your Atelier account.",
 };
 
-function readRedirect(value: string | string[] | undefined): string {
-  const raw = Array.isArray(value) ? value[0] : value;
-  if (raw && raw.startsWith("/") && !raw.startsWith("//")) return raw;
-  return "/account";
-}
-
 export default async function SignInPage({
   searchParams,
 }: PageProps<"/sign-in">) {
   const params = await searchParams;
-  const redirectTo = readRedirect(params.redirect);
+  const redirectTo = sanitizeRedirect(params.redirect);
 
   return (
     <main className="flex-1">
