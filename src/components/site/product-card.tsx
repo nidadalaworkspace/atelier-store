@@ -28,10 +28,11 @@ export function ProductCard({ product, sizes, priority }: Props) {
             sizes ?? "(min-width: 1024px) 24vw, (min-width: 640px) 48vw, 96vw"
           }
           className={cn(
-            "object-cover transition-[transform,filter] duration-[1200ms] ease-[cubic-bezier(.22,1,.36,1)] group-hover:scale-[1.03]",
+            "object-cover transition-[transform,filter] duration-[1200ms] ease-[cubic-bezier(.22,1,.36,1)] group-hover:scale-[1.04]",
             soldOut && "grayscale opacity-80",
           )}
         />
+        <span aria-hidden className="atl-card-overlay" />
         {product.isNew && (
           <span className="absolute top-3 left-3 bg-paper/90 text-ink text-[0.625rem] tracking-widest uppercase px-2.5 py-1">
             New
@@ -55,7 +56,7 @@ export function ProductCard({ product, sizes, priority }: Props) {
               soldOut ? "text-stone-600" : "text-ink",
             )}
           >
-            {product.name}
+            <span className="atl-underline">{product.name}</span>
           </h3>
         </div>
         <div

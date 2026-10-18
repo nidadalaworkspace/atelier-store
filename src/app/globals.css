@@ -383,3 +383,93 @@
     flex: none;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Motion — keyframes and reusable utility classes. Everything is wrapped in
+   `prefers-reduced-motion: no-preference` so screen readers / accessibility
+   settings opt out automatically.
+   --------------------------------------------------------------------------- */
+@keyframes atl-fade-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes atl-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes atl-ken-burns {
+  from { transform: scale(1); }
+  to { transform: scale(1.06); }
+}
+@keyframes atl-reveal-underline {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .atl-fade-up {
+    opacity: 0;
+    animation: atl-fade-up 900ms cubic-bezier(.22, 1, .36, 1) forwards;
+  }
+  .atl-fade-in {
+    opacity: 0;
+    animation: atl-fade-in 900ms ease-out forwards;
+  }
+  .atl-delay-100 { animation-delay: 100ms; }
+  .atl-delay-200 { animation-delay: 200ms; }
+  .atl-delay-300 { animation-delay: 300ms; }
+  .atl-delay-500 { animation-delay: 500ms; }
+  .atl-delay-700 { animation-delay: 700ms; }
+
+  /* Slow Ken-Burns zoom on hero background. */
+  .atl-ken-burns {
+    animation: atl-ken-burns 14s ease-out forwards;
+  }
+
+  /* Reveal underline on hover — pair with a child <span class="atl-underline"/> */
+  .atl-underline {
+    display: inline-block;
+    position: relative;
+  }
+  .atl-underline::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -2px;
+    height: 1px;
+    background: currentColor;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 500ms cubic-bezier(.22, 1, .36, 1);
+  }
+  .group:hover .atl-underline::after,
+  .atl-underline:hover::after {
+    transform: scaleX(1);
+  }
+
+  /* Soft image overlay that fades in on card hover. */
+  .atl-card-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to top,
+      rgba(26, 26, 26, 0.18) 0%,
+      rgba(26, 26, 26, 0) 55%
+    );
+    opacity: 0;
+    transition: opacity 500ms ease-out;
+    pointer-events: none;
+  }
+  .group:hover .atl-card-overlay {
+    opacity: 1;
+  }
+
+  /* Collections strip tile — gentle scale on hover. */
+  .atl-tile-img {
+    transition: transform 1200ms cubic-bezier(.22, 1, .36, 1);
+  }
+  .group:hover .atl-tile-img {
+    transform: scale(1.04);
+  }
+}

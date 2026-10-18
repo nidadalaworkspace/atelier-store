@@ -2,7 +2,11 @@
 // next.config.ts converts this into remotePatterns; the admin product
 // validator rejects imageUrl values that fall outside the list so a save can
 // never leave a product whose packshot 500s the storefront PDP.
-export const ALLOWED_IMAGE_HOSTS = ["images.unsplash.com"] as const;
+export const ALLOWED_IMAGE_HOSTS = [
+  "images.unsplash.com",
+  "picsum.photos",
+  "fastly.picsum.photos",
+] as const;
 
 export function isAllowedImageHost(hostname: string): boolean {
   return (ALLOWED_IMAGE_HOSTS as readonly string[]).includes(hostname);

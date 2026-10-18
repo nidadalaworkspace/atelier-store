@@ -87,6 +87,200 @@ const defaultReference = (slug: string) =>
 const defaultDescription = (name: string, categoryName: string) =>
   `${name} — a considered ${categoryName.toLowerCase()} piece, hand-finished in our atelier in Como and shipped in limited numbers.`;
 
+// --- Filler generation ---------------------------------------------------
+// Produces 20 products per category with picsum.photos images. Slugs are
+// deterministic (category + index + piece) so re-seeding is idempotent and
+// picsum returns the same image on every run (seed param).
+
+type FillerConfig = {
+  pieces: string[];
+  adjectives: string[];
+  priceMinCents: number;
+  priceMaxCents: number;
+  materials: string;
+  care: string;
+  sizes?: string[];
+};
+
+const APPAREL_SIZES = ["XS", "S", "M", "L", "XL"];
+const SHOE_SIZES = ["39", "40", "41", "42", "43", "44", "45"];
+
+const fillerConfig: Record<string, FillerConfig> = {
+  outerwear: {
+    pieces: ["Trench", "Peacoat", "Overcoat", "Parka", "Mac", "Field Jacket", "Topcoat", "Chore Jacket", "Puffer", "Duster"],
+    adjectives: ["Classic", "Oversized", "Belted", "Shawl-Collar", "Double-Breasted", "Cropped", "Longline", "Boxy"],
+    priceMinCents: 85000, priceMaxCents: 180000,
+    materials: "Pure wool shell, cupro lining. Woven in Biella.",
+    care: "Dry clean only. Store on a wide-shoulder hanger.",
+    sizes: APPAREL_SIZES,
+  },
+  knitwear: {
+    pieces: ["Crewneck", "Cardigan", "Turtleneck", "Vest", "Pullover", "Henley", "Jumper", "Zip Knit", "Polo Knit", "Mock Neck"],
+    adjectives: ["Ribbed", "Chunky", "Fine-Gauge", "Cable", "Washed", "Boiled", "Boxy", "Cropped"],
+    priceMinCents: 24500, priceMaxCents: 72500,
+    materials: "100% extra-fine Australian merino wool.",
+    care: "Hand wash cold. Dry flat.",
+    sizes: APPAREL_SIZES,
+  },
+  tailoring: {
+    pieces: ["Suit Trouser", "Pleated Trouser", "Blazer", "Waistcoat", "Cropped Trouser", "Pencil Skirt", "Dress Pant", "Wide-Leg Pant"],
+    adjectives: ["Classic", "High-Waisted", "Tapered", "Draped", "Belted", "Pleated", "Cropped", "Longline"],
+    priceMinCents: 35000, priceMaxCents: 120000,
+    materials: "Super 120s virgin wool. Cut and sewn in Como.",
+    care: "Dry clean only.",
+    sizes: APPAREL_SIZES,
+  },
+  bags: {
+    pieces: ["Shoulder Bag", "Clutch", "Crossbody", "Satchel", "Bucket Bag", "Backpack", "Minibag", "Hobo", "Tote", "Barrel Bag"],
+    adjectives: ["Soft", "Structured", "Compact", "Oversized", "Hand-Burnished", "Patinated", "Numbered", "Signed"],
+    priceMinCents: 65000, priceMaxCents: 220000,
+    materials: "Vegetable-tanned Tuscan calfskin. Solid brass hardware.",
+    care: "Condition with neutral leather balm twice a year.",
+  },
+  accessories: {
+    pieces: ["Scarf", "Belt", "Gloves", "Hat", "Beanie", "Pocket Square", "Umbrella", "Keychain", "Tie", "Bow Tie"],
+    adjectives: ["Printed", "Hand-Rolled", "Hand-Dyed", "Washed", "Woven", "Knitted", "Classic", "Modern"],
+    priceMinCents: 8500, priceMaxCents: 45000,
+    materials: "Natural fibres, specified on the inside label.",
+    care: "Professional care is recommended.",
+  },
+  footwear: {
+    pieces: ["Oxford", "Derby", "Chelsea Boot", "Sneaker", "Ballet Flat", "Mule", "Sandal", "Monk Shoe", "Loafer", "Boot"],
+    adjectives: ["Hand-Lasted", "Patinated", "Burnished", "Suede", "Calfskin", "Waxed", "Vintage", "Classic"],
+    priceMinCents: 42500, priceMaxCents: 110000,
+    materials: "Burnished calfskin upper. Full leather lining.",
+    care: "Brush after wear. Polish monthly with a wax cream.",
+    sizes: SHOE_SIZES,
+  },
+  shirting: {
+    pieces: ["Oxford Shirt", "Dress Shirt", "Camp Collar", "Band Collar", "Western", "Grandad Shirt", "Overshirt", "Smock"],
+    adjectives: ["Classic", "Washed", "Pleated", "Pintuck", "Striped", "Checked", "Boxy", "Longline"],
+    priceMinCents: 18500, priceMaxCents: 52500,
+    materials: "Belgian linen. Hand-finished mother-of-pearl buttons.",
+    care: "Machine wash cold. Iron while damp.",
+    sizes: APPAREL_SIZES,
+  },
+  jewellery: {
+    pieces: ["Chain", "Ring", "Earring", "Bracelet", "Pendant", "Cuff", "Choker", "Hoop", "Signet", "Band"],
+    adjectives: ["18k Gold", "Sterling Silver", "Vermeil", "Hand-Hammered", "Classic", "Modern", "Twisted", "Polished"],
+    priceMinCents: 32500, priceMaxCents: 250000,
+    materials: "Solid 18k yellow gold. Cast and polished in Vicenza.",
+    care: "Clean with a dry polishing cloth. Store in the pouch provided.",
+  },
+  leather: {
+    pieces: ["Wallet", "Cardholder", "Phone Sleeve", "Journal", "Key Pouch", "Document Case", "Passport Cover", "Coin Purse"],
+    adjectives: ["Hand-Stitched", "Patinated", "Vintage", "Classic", "Minimal", "Billfold", "Zipped", "Bifold"],
+    priceMinCents: 14500, priceMaxCents: 78500,
+    materials: "Vegetable-tanned Tuscan calfskin. Saddle-stitched.",
+    care: "Condition with neutral leather balm as needed.",
+  },
+  eyewear: {
+    pieces: ["Reading Glasses", "Round Frame", "Aviator", "Square Frame", "Cat-Eye", "Browline", "Pilot Frame", "Panto"],
+    adjectives: ["Acetate", "Tortoise", "Horn-Rim", "Matte", "Polished", "Classic", "Modern", "Oversized"],
+    priceMinCents: 24500, priceMaxCents: 62500,
+    materials: "Italian acetate frames. Zeiss CR-39 lenses.",
+    care: "Clean with microfibre only. Store in the hard case.",
+  },
+  travel: {
+    pieces: ["Duffel", "Carry-On", "Garment Bag", "Toiletry Case", "Passport Holder", "Luggage Tag", "Weekender", "Dopp Kit"],
+    adjectives: ["Hand-Burnished", "Patinated", "Classic", "Compact", "Oversized", "Reinforced", "Signed", "Numbered"],
+    priceMinCents: 28500, priceMaxCents: 240000,
+    materials: "Full-grain bridle leather with canvas lining.",
+    care: "Condition with neutral leather balm twice a year.",
+  },
+  "soft-tailoring": {
+    pieces: ["Soft Blazer", "Unstructured Jacket", "Belted Jacket", "Oversized Blazer", "Robe Coat", "Kimono Jacket", "Short Jacket", "Suit Jacket"],
+    adjectives: ["Draped", "Unlined", "Wrapped", "Oversized", "Cropped", "Longline", "Boxy", "Cocoon"],
+    priceMinCents: 55000, priceMaxCents: 145000,
+    materials: "Lightweight wool-silk blend. Unlined.",
+    care: "Dry clean only. Store on a wide-shoulder hanger.",
+    sizes: APPAREL_SIZES,
+  },
+  "leather-and-craft": {
+    pieces: ["Hand-Stitched Journal", "Hand-Woven Belt", "Hand-Tooled Wallet", "Hand-Dyed Pouch", "Saddle-Stitched Case", "Numbered Trunk", "Rolled Portfolio", "Bound Notebook"],
+    adjectives: ["Signed", "Numbered", "Hand-Stitched", "Vegetable-Tanned", "Hand-Dyed", "Patinated", "Classic", "Vintage"],
+    priceMinCents: 24500, priceMaxCents: 120000,
+    materials: "Vegetable-tanned Tuscan calfskin. Saddle-stitched by hand.",
+    care: "Condition with neutral leather balm as needed.",
+  },
+  "objects-for-the-home": {
+    pieces: ["Linen Throw", "Hand-Thrown Vase", "Ceramic Bowl", "Oak Serving Board", "Candle", "Beeswax Taper", "Clay Plate", "Olive Oil Decanter"],
+    adjectives: ["Hand-Thrown", "Washed", "Hand-Carved", "Hand-Dipped", "Natural", "Undyed", "Reclaimed", "Numbered"],
+    priceMinCents: 8500, priceMaxCents: 45000,
+    materials: "Natural stoneware fired to 1240°C. Food-safe matte glaze.",
+    care: "Dishwasher safe but hand wash is kinder.",
+  },
+  "fine-jewellery": {
+    pieces: ["18k Chain", "Signet Band", "Diamond Studs", "Gold Hoop", "Pearl Pendant", "Emerald Ring", "Sapphire Band", "Diamond Line"],
+    adjectives: ["Solid Gold", "Hand-Set", "Classic", "Hand-Engraved", "Modern", "Vintage", "Polished", "Brushed"],
+    priceMinCents: 95000, priceMaxCents: 650000,
+    materials: "Solid 18k yellow gold. Stones conflict-free and traceable.",
+    care: "Clean with a dry polishing cloth. Insure for replacement value.",
+  },
+};
+
+// Readable, URL-safe slug from an arbitrary string.
+const kebab = (s: string) =>
+  s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+// Picsum returns the same image for the same ?seed query — deterministic.
+const picsum = (seed: string, w = 1200, h = 1500) =>
+  `https://picsum.photos/seed/${seed}/${w}/${h}`;
+
+function generateFiller(
+  categorySlug: string,
+  categoryName: string,
+  count: number,
+): ProductSeed[] {
+  const cfg = fillerConfig[categorySlug];
+  if (!cfg) {
+    throw new Error(`No filler config for category "${categorySlug}"`);
+  }
+  const out: ProductSeed[] = [];
+  for (let i = 0; i < count; i++) {
+    const piece = cfg.pieces[i % cfg.pieces.length];
+    const adj = cfg.adjectives[i % cfg.adjectives.length];
+    const index = String(i + 1).padStart(2, "0");
+    const name = `${adj} ${piece}`;
+    const slug = `${categorySlug}-${index}-${kebab(piece)}`;
+    // Deterministic pseudo-random price inside the band.
+    const span = cfg.priceMaxCents - cfg.priceMinCents;
+    const priceCents =
+      cfg.priceMinCents + ((i * 97 + categorySlug.length * 13) % (span + 1));
+    // Round to nearest $5.
+    const roundedPrice = Math.round(priceCents / 500) * 500;
+    out.push({
+      slug,
+      name,
+      categorySlug,
+      priceCents: roundedPrice,
+      isNew: i < 3,
+      description: `${name} — ${defaultDescription(name, categoryName)}`,
+      materials: cfg.materials,
+      care: cfg.care,
+      reference: `ATL-${categorySlug.slice(0, 3).toUpperCase()}-${index}`,
+      sizes: cfg.sizes,
+      details: DEFAULT_DETAILS,
+      stockQuantity: i === 7 || i === 15 ? 0 : 3 + (i % 12),
+      madeToOrder: i === 7 || i === 15,
+      images: [
+        {
+          url: picsum(slug, 1200, 1500),
+          alt: `${name} — ${categoryName}`,
+        },
+        {
+          url: picsum(`${slug}-alt`, 1200, 1500),
+          alt: `${name} — detail`,
+        },
+      ],
+    });
+  }
+  return out;
+}
+
 // Products in homepage display order. Position 0 = newest = first card on the
 // new-arrivals grid; positions 0..7 are the "New Arrivals" grid, 8..11 the
 // "Curated Edit" rail. Seeded with descending createdAt matching this order.
@@ -392,6 +586,25 @@ async function seed() {
 
   console.log("Inserting categories…");
   const allCategorySeeds = [...stripCategories, ...labelCategories];
+
+  // Fill each category to 20 products using the picsum-backed generator.
+  // Hand-crafted productSeeds stay first (newest createdAt) so the homepage
+  // curated grid is unchanged; filler lands below them.
+  const PER_CATEGORY = 20;
+  const existingByCategory = new Map<string, number>();
+  for (const p of productSeeds) {
+    existingByCategory.set(
+      p.categorySlug,
+      (existingByCategory.get(p.categorySlug) ?? 0) + 1,
+    );
+  }
+  const filler: ProductSeed[] = [];
+  for (const c of allCategorySeeds) {
+    const have = existingByCategory.get(c.slug) ?? 0;
+    const need = Math.max(0, PER_CATEGORY - have);
+    if (need > 0) filler.push(...generateFiller(c.slug, c.name, need));
+  }
+  const allProductSeeds = [...productSeeds, ...filler];
   const categoryRows = await db
     .insert(categories)
     .values(
@@ -408,11 +621,11 @@ async function seed() {
 
   const categoryIdBySlug = new Map(categoryRows.map((r) => [r.slug, r.id]));
 
-  console.log("Inserting products…");
+  console.log(`Inserting products (${allProductSeeds.length})…`);
   const productRows = await db
     .insert(products)
     .values(
-      productSeeds.map((p, i) => {
+      allProductSeeds.map((p, i) => {
         const categoryId = categoryIdBySlug.get(p.categorySlug);
         if (!categoryId) {
           throw new Error(
@@ -435,7 +648,7 @@ async function seed() {
           madeToOrder: p.madeToOrder,
           // descending so getNewArrivals/Curated ORDER BY createdAt DESC
           // returns products in seed order (position 0 = newest)
-          createdAt: new Date(base + (productSeeds.length - i) * hour),
+          createdAt: new Date(base + (allProductSeeds.length - i) * hour),
         };
       }),
     )
@@ -444,7 +657,7 @@ async function seed() {
   const productIdBySlug = new Map(productRows.map((r) => [r.slug, r.id]));
 
   console.log("Inserting product images…");
-  const imageRows = productSeeds.flatMap((p) =>
+  const imageRows = allProductSeeds.flatMap((p) =>
     p.images.map((img, position) => ({
       productId: productIdBySlug.get(p.slug)!,
       url: img.url,

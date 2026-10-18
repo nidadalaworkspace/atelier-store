@@ -37,12 +37,13 @@ export async function FeaturedCollections() {
                     alt={collection.name}
                     fill
                     sizes="(min-width: 1024px) 24vw, (min-width: 640px) 48vw, 96vw"
-                    className="object-cover transition-transform duration-[1200ms] ease-[cubic-bezier(.22,1,.36,1)] group-hover:scale-[1.03]"
+                    className="object-cover atl-tile-img"
                   />
+                  <span aria-hidden className="atl-card-overlay" />
                 </div>
                 <div className="mt-5">
                   <h3 className="font-display text-xl md:text-2xl leading-tight">
-                    {collection.name}
+                    <span className="atl-underline">{collection.name}</span>
                   </h3>
                   <p className="mt-1.5 text-sm text-stone-600">
                     {collection.tagline}

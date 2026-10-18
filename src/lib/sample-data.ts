@@ -38,12 +38,12 @@ export const services = [
 export const nav = {
   primary: [
     { label: "New In", href: "/new-arrivals" },
-    { label: "Women", href: "/women" },
-    { label: "Men", href: "/men" },
-    { label: "Bags", href: "/bags" },
-    { label: "Jewellery", href: "/jewellery" },
-    { label: "Home", href: "/home" },
-    { label: "Gifts", href: "/gifts" },
+    { label: "Outerwear", href: "/collections/outerwear" },
+    { label: "Tailoring", href: "/collections/tailoring" },
+    { label: "Bags", href: "/collections/bags" },
+    { label: "Jewellery", href: "/collections/jewellery" },
+    { label: "Accessories", href: "/collections/accessories" },
+    { label: "Footwear", href: "/collections/footwear" },
   ],
   footer: {
     client: [
